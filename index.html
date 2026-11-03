@@ -17,7 +17,7 @@
     body {
       background-color: #121212;
       color: #fff;
-      padding: 30px 20px 110px; /* เว้นที่ด้านล่างให้แถบสรุปสถานะ */
+      padding: 30px 20px 80px; /* เว้นที่ด้านล่างให้แถบสรุปสถานะ */
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -80,20 +80,21 @@
 
     .notice { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 30px 10px; line-height: 1.7; }
 
-    /* แถบสรุปสถานะ ติดด้านล่างสุดของหน้าจอ */
+    /* แถบสรุปสถานะ: แถวเดียวเล็กๆ ติดด้านล่างหน้าจอ */
     .statusbar {
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
       background: #181818; border-top: 1px solid #2a2a2a;
-      padding: 10px 16px;
-      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
     }
-    .count { font-size: 13px; color: var(--muted); }
-    .filters { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .filters { display: flex; flex-wrap: nowrap; gap: 6px; justify-content: center; overflow-x: auto; }
     .chip {
-      padding: 6px 14px; border-radius: 999px; border: 1px solid #333;
+      display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; white-space: nowrap;
+      padding: 6px 12px; border-radius: 999px; border: 1px solid #333;
       background: #1e1e1e; color: #ccc; font-size: 14px; cursor: pointer;
     }
     .chip.active { border-color: #0070f3; color: #fff; background: #0a2a52; }
+    .chip.zero { opacity: 0.4; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
   </style>
 </head>
 <body>
@@ -110,7 +111,6 @@
   <div class="results-grid" id="resultsContainer"></div>
 
   <div class="statusbar">
-    <div class="count" id="count"></div>
     <div class="filters" id="filters"></div>
   </div>
 
@@ -188,7 +188,6 @@
       const myReq = ++reqId; // กันผลของ request เก่ามาทับผลใหม่
       const container = $('resultsContainer');
       container.innerHTML = '<div class="notice">Loading...</div>';
-      $('count').textContent = '';
       $('filters').innerHTML = '';
       try {
         const q = $('searchInput').value.trim();
@@ -212,21 +211,25 @@
       const counts = { all: withStatus.length, ok: 0, soon: 0, expired: 0, none: 0 };
       withStatus.forEach((it) => counts[it.st.key]++);
 
-      // แถบสรุปสถานะด้านล่าง (แสดงครบทุกปุ่ม แม้จำนวนเป็น 0 เพื่อไม่ให้ปุ่มที่เลือกอยู่หายไป)
+      // แถบสรุปสถานะด้านล่าง: จุดสี + จำนวน (ปุ่มที่เลือกอยู่จะแสดงชื่อสถานะ, กดซ้ำเพื่อกลับไปดูทั้งหมด)
       const chips = [
-        ['all', 'All'], ['ok', '🟢 Valid'], ['soon', '🟡 Expiring soon'], ['expired', '🔴 Expired'], ['none', '⚪ Request Rate / No date'],
+        ['all', 'All', null], ['ok', 'Valid', 'var(--green)'], ['soon', 'Soon', 'var(--yellow)'],
+        ['expired', 'Expired', 'var(--red)'], ['none', 'No date', '#bbb'],
       ];
-      $('filters').innerHTML = chips
-        .map(([k, label]) => `<button class="chip ${currentFilter === k ? 'active' : ''}" onclick="setFilter('${k}')">${label} (${counts[k]})</button>`)
-        .join('');
+      $('filters').innerHTML = chips.map(([k, label, color]) => {
+        const active = currentFilter === k;
+        const dot = color ? `<i class="dot" style="background:${color}"></i>` : '';
+        const text = k === 'all' || active ? label : '';
+        const next = active && k !== 'all' ? 'all' : k;
+        const tip = k === 'none' ? 'Request Rate / No expiry date' : k === 'soon' ? 'Expiring within 30 days' : label;
+        return `<button class="chip ${active ? 'active' : ''} ${counts[k] === 0 && !active ? 'zero' : ''}" title="${tip}" aria-label="${tip}: ${counts[k]}" onclick="setFilter('${next}')">${dot}${text}<b>${counts[k]}</b></button>`;
+      }).join('');
 
       let list = currentFilter === 'all' ? withStatus : withStatus.filter((it) => it.st.key === currentFilter);
 
       // เรียง: ใกล้หมดก่อน → ปกติ → หมดแล้ว → ไม่ระบุ (ภายในกลุ่มเรียงตามวันที่)
       const order = { soon: 0, ok: 1, expired: 2, none: 3 };
       list = [...list].sort((a, b) => order[a.st.key] - order[b.st.key] || (a.expiryISO || '').localeCompare(b.expiryISO || '') || a.name.localeCompare(b.name));
-
-      $('count').textContent = `Showing ${list.length} of ${withStatus.length}`;
 
       if (list.length === 0) {
         $('resultsContainer').innerHTML = '<div class="notice">No results found.<br>Try a different keyword or select "All" below.</div>';
