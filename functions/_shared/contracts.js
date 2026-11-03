@@ -1,14 +1,17 @@
 // ตัวช่วยกลาง ใช้ร่วมกันทั้ง Hotel และ Tour (Cloudflare Pages Functions)
 // ชื่อคอลัมน์ใส่เป็นรายการได้ จะใช้ชื่อแรกที่เจอใน Notion
+// แต่ละฝั่งใช้ integration (key) และ database ของตัวเอง ตั้งค่าไว้ใน Cloudflare Variables
 
 const SOURCES = {
   hotel: {
+    keyEnv: 'NOTION_KEY',
     dbEnv: 'NOTION_DATABASE_ID',
     props: { name: ['Hotel'], location: ['Location'], supplier: [], exp: ['EXP'], files: ['Files & media'] },
     searchIn: ['name', 'location'],
     noDate: 'Request Rate', // ข้อความเมื่อไม่มีวันหมดอายุ
   },
   tour: {
+    keyEnv: 'NOTION_TOUR_KEY',
     dbEnv: 'NOTION_TOUR_DATABASE_ID',
     props: { name: ['Tour'], location: ['Location'], supplier: [], exp: ['EXP'], files: ['Files & media'] },
     searchIn: ['name', 'location'],
@@ -102,8 +105,9 @@ export async function handle(context, type) {
   try {
     const cfg = SOURCES[type];
     const { env, request } = context;
+    const notionKey = env[cfg.keyEnv];
     const dbId = env[cfg.dbEnv];
-    if (!env.NOTION_KEY) throw new Error('Missing NOTION_KEY in Cloudflare variables');
+    if (!notionKey) throw new Error(`Missing ${cfg.keyEnv} in Cloudflare variables`);
     if (!dbId) throw new Error(`Missing ${cfg.dbEnv} in Cloudflare variables`);
 
     let items;
@@ -111,7 +115,7 @@ export async function handle(context, type) {
     if (hit && hit.dbId === dbId && Date.now() - hit.time < CACHE_MS) {
       items = hit.items;
     } else {
-      const pages = await fetchAllPages(dbId, env.NOTION_KEY);
+      const pages = await fetchAllPages(dbId, notionKey);
       items = pages.map((pg) => toItem(pg, cfg)).filter(Boolean);
       cache[type] = { dbId, time: Date.now(), items };
     }
