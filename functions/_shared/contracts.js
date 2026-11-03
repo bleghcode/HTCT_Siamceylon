@@ -11,7 +11,7 @@ const SOURCES = {
   tour: {
     dbEnv: 'NOTION_TOUR_DATABASE_ID',
     props: { name: ['Tour'], location: ['Location'], supplier: [], exp: ['EXP'], files: ['Files & media'] },
-    searchIn: ['name', 'location', 'supplier'],
+    searchIn: ['name', 'location'],
     noDate: 'Request Rate',
   },
 };
