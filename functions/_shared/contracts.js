@@ -1,0 +1,118 @@
+// ตัวช่วยกลาง ใช้ร่วมกันทั้ง Hotel และ Tour (Cloudflare Pages Functions)
+
+const SOURCES = {
+  hotel: {
+    dbEnv: 'NOTION_DATABASE_ID',
+    props: { name: 'Hotel', location: 'Location', supplier: null, exp: 'EXP', files: 'Files & media' },
+    searchIn: ['name', 'location'],
+    noDate: 'Request Rate', // ข้อความที่แสดงเมื่อไม่มีวันหมดอายุ (เหมือนของเดิม)
+  },
+  tour: {
+    dbEnv: 'NOTION_TOUR_DATABASE_ID',
+    props: { name: 'Tour', location: 'Destination', supplier: 'Supplier', exp: 'EXP', files: 'Files & media' },
+    searchIn: ['name', 'location', 'supplier'],
+    noDate: '-', // ถ้าอยากให้ทัวร์ขึ้น Request Rate เหมือนโรงแรม แก้ตรงนี้
+  },
+};
+
+// ดึงข้อมูลทุกหน้า (รองรับเกิน 100 รายการ)
+async function fetchAllPages(dbId, notionKey) {
+  let pages = [];
+  let cursor;
+  do {
+    const response = await fetch(`https://api.notion.com/v1/databases/${dbId}/query`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${notionKey}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Error fetching from Notion');
+    pages = pages.concat(data.results);
+    cursor = data.has_more ? data.next_cursor : undefined;
+  } while (cursor);
+  return pages;
+}
+
+function readText(prop) {
+  if (!prop) return '';
+  if (prop.title) return prop.title.map((t) => t.plain_text).join('');
+  if (prop.rich_text) return prop.rich_text.map((t) => t.plain_text).join('');
+  if (prop.select) return prop.select.name || '';
+  if (prop.multi_select) return prop.multi_select.map((s) => s.name).join(', ');
+  return '';
+}
+
+function toItem(page, cfg) {
+  const p = page.properties;
+  const files = (p[cfg.props.files]?.files || [])
+    .map((f) => ({ name: f.name, url: f.file?.url || f.external?.url }))
+    .filter((f) => f.url);
+
+  const expiryISO = p[cfg.props.exp]?.date?.start?.slice(0, 10) || null;
+  let expiryDate = cfg.noDate;
+  if (expiryISO) {
+    const [yyyy, mm, dd] = expiryISO.split('-');
+    expiryDate = `${dd}/${mm}/${yyyy}`;
+  }
+
+  return {
+    id: page.id,
+    name: readText(p[cfg.props.name]) || 'Untitled',
+    location: readText(p[cfg.props.location]),
+    supplier: cfg.props.supplier ? readText(p[cfg.props.supplier]) : '',
+    files,
+    contractUrl: files[0]?.url || '#',
+    expiryDate,
+    expiryISO,
+  };
+}
+
+// cache 60 วินาที (ลิงก์ไฟล์ Notion หมดอายุใน ~1 ชม. จึงไม่ควร cache นาน)
+const CACHE_MS = 60 * 1000;
+const cache = {};
+
+function filterItems(items, cfg, query) {
+  const words = (query || '').toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return items;
+  return items.filter((it) => {
+    const haystack = cfg.searchIn.map((k) => it[k] || '').join(' ').toLowerCase();
+    return words.every((w) => haystack.includes(w));
+  });
+}
+
+export async function handle(context, type) {
+  const headers = {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-store',
+    'Access-Control-Allow-Origin': '*',
+  };
+  try {
+    const cfg = SOURCES[type];
+    const { env, request } = context;
+    const dbId = env[cfg.dbEnv];
+    if (!env.NOTION_KEY) throw new Error('Missing NOTION_KEY in Cloudflare variables');
+    if (!dbId) throw new Error(`Missing ${cfg.dbEnv} in Cloudflare variables`);
+
+    let items;
+    const hit = cache[type];
+    if (hit && hit.dbId === dbId && Date.now() - hit.time < CACHE_MS) {
+      items = hit.items;
+    } else {
+      const pages = await fetchAllPages(dbId, env.NOTION_KEY);
+      items = pages.map((pg) => toItem(pg, cfg));
+      cache[type] = { dbId, time: Date.now(), items };
+    }
+
+    const query = new URL(request.url).searchParams.get('query');
+    // ตัดแถวที่ ID ซ้ำกันออก (เหมือนของเดิม)
+    const unique = Array.from(new Map(filterItems(items, cfg, query).map((it) => [it.id, it])).values());
+    return new Response(JSON.stringify(unique), { headers });
+  } catch (error) {
+    console.error('API Error:', error.message);
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers });
+  }
+}

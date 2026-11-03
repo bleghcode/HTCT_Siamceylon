@@ -201,7 +201,7 @@
 
       // chip กรองตามสถานะ
       const chips = [
-        ['all', 'ทั้งหมด'], ['ok', '🟢 ปกติ'], ['soon', '🟡 ใกล้หมด'], ['expired', '🔴 หมดแล้ว'], ['none', '⚪ ไม่มีวันหมดอายุ'],
+        ['all', 'ทั้งหมด'], ['ok', '🟢 ปกติ'], ['soon', '🟡 ใกล้หมด'], ['expired', '🔴 หมดแล้ว'], ['none', '⚪ Request Rate / ไม่มีวันหมดอายุ'],
       ];
       $('filters').innerHTML = chips
         .filter(([k]) => k === 'all' || counts[k] > 0)
@@ -240,7 +240,7 @@
             <div class="label">Expiry Date</div>
             <div class="expiry-row">
               <span class="expiry-date">${esc(it.expiryDate)}</span>
-              <span class="badge">${esc(statusLabel(it.st))}</span>
+              ${it.st.key === 'none' ? '' : `<span class="badge">${esc(statusLabel(it.st))}</span>`}
             </div>
           </div>`;
       }).join('');
