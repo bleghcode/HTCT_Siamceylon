@@ -105,7 +105,7 @@
   </div>
 
   <div class="search-box">
-    <input type="text" id="searchInput" aria-label="Search" autocomplete="off" oninput="handleSearch()">
+    <input type="text" id="searchInput" autocomplete="off" oninput="handleSearch()">
   </div>
 
   <div class="results-grid" id="resultsContainer"></div>
@@ -128,14 +128,12 @@
       },
     };
     const SOON_DAYS = 30;
-    const REFRESH_AFTER_MS = 30 * 60 * 1000; // ลิงก์ไฟล์ Notion หมดอายุใน ~1 ชม. จึงรีโหลดข้อมูลเมื่อเปิดหน้าค้างไว้นาน
 
     let currentType = 'hotel';
     let currentFilter = 'all';
     let allResults = [];
     let timer;
     let reqId = 0;
-    let lastLoad = Date.now();
 
     const $ = (id) => document.getElementById(id);
 
@@ -187,22 +185,20 @@
     async function loadData() {
       const myReq = ++reqId; // กันผลของ request เก่ามาทับผลใหม่
       const container = $('resultsContainer');
-      container.innerHTML = '<div class="notice">Loading...</div>';
-      $('filters').innerHTML = '';
+      container.innerHTML = '<div class="notice">กำลังโหลด...</div>';
       try {
         const q = $('searchInput').value.trim();
         const res = await fetch(`${CONFIG[currentType].endpoint}?query=${encodeURIComponent(q)}`);
-        let data;
-        try { data = await res.json(); } catch (e) { throw new Error(`Server returned an invalid response (${res.status})`); }
+        const data = await res.json();
         if (myReq !== reqId) return;
-        if (!res.ok) throw new Error(data.error || `Server error (${res.status})`);
+        if (!res.ok) throw new Error(data.error || 'Server error');
         allResults = data;
-        lastLoad = Date.now();
         render();
       } catch (err) {
         if (myReq !== reqId) return;
         console.error('Search error:', err);
-        container.innerHTML = `<div class="notice">Failed to load data.<br>Please refresh (F5) and try again.<br><small>${esc(err.message)}</small></div>`;
+        $('filters').innerHTML = '';
+        container.innerHTML = `<div class="notice">โหลดข้อมูลไม่สำเร็จ<br>ลองรีเฟรช (F5) แล้วค้นหาใหม่อีกครั้ง<br><small>${esc(err.message)}</small></div>`;
       }
     }
 
@@ -222,7 +218,7 @@
         const text = k === 'all' || active ? label : '';
         const next = active && k !== 'all' ? 'all' : k;
         const tip = k === 'none' ? 'Request Rate / No expiry date' : k === 'soon' ? 'Expiring within 30 days' : label;
-        return `<button class="chip ${active ? 'active' : ''} ${counts[k] === 0 && !active ? 'zero' : ''}" title="${tip}" aria-label="${tip}: ${counts[k]}" onclick="setFilter('${next}')">${dot}${text}<b>${counts[k]}</b></button>`;
+        return `<button class="chip ${active ? 'active' : ''} ${counts[k] === 0 && !active ? 'zero' : ''}" title="${tip}" onclick="setFilter('${next}')">${dot}${text}<b>${counts[k]}</b></button>`;
       }).join('');
 
       let list = currentFilter === 'all' ? withStatus : withStatus.filter((it) => it.st.key === currentFilter);
@@ -232,7 +228,7 @@
       list = [...list].sort((a, b) => order[a.st.key] - order[b.st.key] || (a.expiryISO || '').localeCompare(b.expiryISO || '') || a.name.localeCompare(b.name));
 
       if (list.length === 0) {
-        $('resultsContainer').innerHTML = '<div class="notice">No results found.<br>Try a different keyword or select "All" below.</div>';
+        $('resultsContainer').innerHTML = '<div class="notice">ไม่พบข้อมูล ลองเปลี่ยนคำค้นหา หรือกด "All" ด้านล่าง</div>';
         return;
       }
 
@@ -241,7 +237,7 @@
         const files = (it.files || []).filter((f) => safeUrl(f.url));
         const fileHtml = files.length
           ? files.map((f) => `<a href="${esc(safeUrl(f.url))}" target="_blank" rel="noopener" class="btn-open" title="${esc(f.name)}">📂 ${esc(f.name || 'OPEN FILE')}</a>`).join('')
-          : '<div class="no-file">No file</div>';
+          : '<div class="no-file">ยังไม่มีไฟล์</div>';
 
         return `
           <div class="result-item st-${it.st.key}">
@@ -260,11 +256,6 @@
           </div>`;
       }).join('');
     }
-
-    // เปิดหน้าค้างไว้นานแล้วกลับมาดูอีกที → โหลดข้อมูลใหม่ (กันลิงก์ไฟล์หมดอายุ + อัปเดตสถานะตามวัน)
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && Date.now() - lastLoad > REFRESH_AFTER_MS) loadData();
-    });
 
     // เปิดหน้าแล้วแสดงทั้งหมดทันที
     switchTab('hotel');
