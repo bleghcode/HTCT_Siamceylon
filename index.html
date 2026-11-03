@@ -3,197 +3,251 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hotel Contract Database</title>
-
-  <link rel="icon" type="image/png" href="/favicon.png">
-  
+  <title>Contract Database</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+
+    :root {
+      --red: #ff4d4f;
+      --yellow: #faad14;
+      --green: #52c41a;
+      --muted: #888;
     }
 
     body {
       background-color: #121212;
-      color: #ffffff;
-      padding: 40px 20px;
+      color: #fff;
+      padding: 30px 20px;
       display: flex;
       flex-direction: column;
       align-items: center;
       min-height: 100vh;
     }
 
-    .search-box {
-      width: 100%;
-      max-width: 600px;
-      margin-bottom: 30px;
+    .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+    .tab {
+      padding: 10px 26px; border-radius: 8px; border: 1px solid #333;
+      background: #1e1e1e; color: #aaa; font-size: 16px; font-weight: bold; cursor: pointer;
     }
+    .tab.active { background: #0070f3; border-color: #0070f3; color: #fff; }
 
+    .search-box { width: 100%; max-width: 600px; margin-bottom: 16px; }
     .search-box input {
-      width: 100%;
-      padding: 15px 20px;
-      font-size: 18px;
-      border-radius: 8px;
-      border: 1px solid #333;
-      background-color: #1e1e1e;
-      color: #fff;
-      outline: none;
+      width: 100%; padding: 15px 20px; font-size: 18px; border-radius: 8px;
+      border: 1px solid #333; background-color: #1e1e1e; color: #fff; outline: none;
       transition: border-color 0.3s;
     }
+    .search-box input:focus { border-color: #0070f3; }
 
-    .search-box input:focus {
-      border-color: #0070f3;
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 8px; }
+    .chip {
+      padding: 6px 14px; border-radius: 999px; border: 1px solid #333;
+      background: #1e1e1e; color: #ccc; font-size: 14px; cursor: pointer;
     }
+    .chip.active { border-color: #0070f3; color: #fff; background: #0a2a52; }
+
+    .count { font-size: 13px; color: var(--muted); margin-bottom: 18px; min-height: 18px; }
 
     .results-grid {
-      width: 100%;
-      max-width: 1000px;
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 20px;
+      width: 100%; max-width: 1000px; display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;
     }
 
     .result-item {
-      background-color: #1e1e1e;
-      border-radius: 10px;
-      padding: 20px;
-      border: 1px solid #2a2a2a;
-      display: flex;
-      flex-direction: column;
+      background-color: #1e1e1e; border-radius: 10px; padding: 20px;
+      border: 1px solid #2a2a2a; border-left: 4px solid #444;
+      display: flex; flex-direction: column;
     }
+    .result-item.st-expired { border-left-color: var(--red); }
+    .result-item.st-soon { border-left-color: var(--yellow); }
+    .result-item.st-ok { border-left-color: var(--green); }
 
-    .hotel-name {
-      font-size: 20px;
-      font-weight: bold;
-      margin-bottom: 5px;
-      color: #ffffff;
-    }
+    .item-name { font-size: 20px; font-weight: bold; margin-bottom: 4px; word-break: break-word; }
+    .meta { font-size: 14px; color: #aaa; }
+    .meta + .meta { margin-top: 2px; }
 
-    .location {
-      font-size: 14px;
-      color: #aaa;
-      margin-bottom: 15px;
-    }
-
-    .contract-label, .expiry-label {
-      font-size: 12px;
-      color: #888;
-      margin-top: 10px;
-    }
+    .label { font-size: 12px; color: var(--muted); margin-top: 14px; }
 
     .btn-open {
-      display: inline-block;
-      margin-top: 5px;
-      padding: 8px 12px;
-      background-color: #0070f3;
-      color: white;
-      text-decoration: none;
-      border-radius: 5px;
-      font-weight: bold;
-      text-align: center;
-      transition: background-color 0.2s;
+      display: block; margin-top: 6px; padding: 8px 12px; background-color: #0070f3;
+      color: #fff; text-decoration: none; border-radius: 5px; font-weight: bold;
+      text-align: center; transition: background-color 0.2s;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
+    .btn-open:hover { background-color: #0051a8; }
+    .no-file { margin-top: 6px; color: #666; font-size: 14px; }
 
-    .btn-open:hover {
-      background-color: #0051a8;
-    }
+    .expiry-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
+    .expiry-date { font-size: 16px; font-weight: 500; }
+    .badge { font-size: 12px; font-weight: bold; padding: 3px 10px; border-radius: 999px; color: #121212; }
+    .st-expired .badge { background: var(--red); }
+    .st-soon .badge { background: var(--yellow); }
+    .st-ok .badge { background: var(--green); }
+    .st-none .badge { background: #555; color: #fff; }
+    .st-expired .expiry-date { color: var(--red); }
+    .st-soon .expiry-date { color: var(--yellow); }
+    .st-ok .expiry-date { color: var(--green); }
 
-    .expiry-date {
-      font-size: 16px;
-      font-weight: 500;
-      color: #ff4d4f;
-      margin-top: 4px;
-    }
+    .notice { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 30px 10px; line-height: 1.7; }
   </style>
 </head>
 <body>
 
-  <div class="search-box">
-    <input type="text" id="searchInput" placeholder="Search Hotel Name... (พิมพ์ชื่อโรงแรมเพื่อค้นหา)" oninput="handleSearch()">
+  <div class="tabs">
+    <button class="tab active" data-type="hotel" onclick="switchTab('hotel')">🏨 Hotel</button>
+    <button class="tab" data-type="tour" onclick="switchTab('tour')">🚌 Tour</button>
   </div>
+
+  <div class="search-box">
+    <input type="text" id="searchInput" autocomplete="off" oninput="handleSearch()">
+  </div>
+
+  <div class="filters" id="filters"></div>
+  <div class="count" id="count"></div>
 
   <div class="results-grid" id="resultsContainer"></div>
 
   <script>
+    const CONFIG = {
+      hotel: {
+        endpoint: '/api/search',
+        placeholder: 'ค้นหาโรงแรม / เมือง... (Search hotel name or location)',
+        fileLabel: '📄 Contract Rate',
+      },
+      tour: {
+        endpoint: '/api/tours/search',
+        placeholder: 'ค้นหาทัวร์ / จุดหมาย / ซัพพลายเออร์... (Search tour, destination or supplier)',
+        fileLabel: '📄 Contract / Rate File',
+      },
+    };
+    const SOON_DAYS = 30;
+    const STATUS_TEXT = { expired: 'หมดอายุแล้ว', soon: 'ใกล้หมดอายุ', ok: 'ปกติ', none: 'ไม่ระบุวันหมดอายุ' };
+
+    let currentType = 'hotel';
+    let currentFilter = 'all';
+    let allResults = [];
     let timer;
+    let reqId = 0;
 
-    async function fetchHotels(keyword = '') {
-      const container = document.getElementById('resultsContainer');
-      container.innerHTML = ''; // ล้างหน้าจอก่อนทุกครั้ง
+    const $ = (id) => document.getElementById(id);
 
-      try {
-        const response = await fetch(`/api/search?query=${encodeURIComponent(keyword)}&_t=${Date.now()}`, {
-          cache: 'no-store'
-        });
-        const data = await response.json();
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+    function safeUrl(u) {
+      return /^https?:\/\//i.test(u || '') ? u : '';
+    }
 
-        if (!data || data.length === 0) {
-          const hotelList = [
-            "Season Siam", "Ten Star Inn", "Pj WaterGate", "Pannarai 🌏", "Baiyoke Suite 💲",
-            "Baiyoke Sky 🏩", "Baiyoke Boutique🅱️", "Tango Vibrant🔔", "Dream Town", 
-            "Bangkok Palace 🎴", "De Bangkok🈳", "Visiting Card 🦀", "Ramada Hotel Bangkok", 
-            "Centara Watergate Pavilion Hotel", "The Berkeley", "J Two S Pratunam", 
-            "The Ecotel Bangkok💊", "Nova Platinum", "De Prime Rangnam", 
-            "FuramaXclusive Pratunam Park", "Centre Point🤖", "Ambassador Hotel Bangkok", 
-            "Grand Hyatt Erawan", "Beston pattaya", "Golden Beach", 
-            "Eastern Grand Palace Pattaya", "Welcome Plaza✡️", "Heeton Concept🌹", 
-            "Caesar Palace", "Arawana South Pattaya", "Sun Sea Sand🍞", 
-            "Phoenix Grand Patong🌈", "Sofitel Krabi Phokeethra Golf & Spa Resort", 
-            "Best Western Patong Phuket", "The Crib Patong , Phuket", 
-            "Splash Beach Resort Phuket", "Burasari Resort", "Portofino Toscana ☕"
-          ];
+    // คำนวณสถานะวันหมดอายุ
+    function getStatus(iso) {
+      if (!iso) return { key: 'none', days: null };
+      const [y, m, d] = iso.split('-').map(Number);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const days = Math.round((new Date(y, m - 1, d) - today) / 86400000);
+      if (days < 0) return { key: 'expired', days };
+      if (days <= SOON_DAYS) return { key: 'soon', days };
+      return { key: 'ok', days };
+    }
+    function statusLabel(st) {
+      if (st.key === 'expired') return `หมดอายุแล้ว ${Math.abs(st.days)} วัน`;
+      if (st.key === 'soon') return st.days === 0 ? 'หมดอายุวันนี้' : `เหลืออีก ${st.days} วัน`;
+      return STATUS_TEXT[st.key];
+    }
 
-          const listItems = hotelList.map(hotel => `<li>${hotel}</li>`).join('');
-          container.innerHTML = `
-            <div style="grid-column: 1/-1; text-align: center; color: #888; padding: 20px;">
-              <p class="notice" style="font-weight: bold; margin-bottom: 15px;">
-                "Please check the available hotel list below. If data is still not found, try refreshing (F5) or re-entering the website."
-              </p>
-              <h3 style="margin-bottom: 10px; color: #fff;">Available Hotel List</h3>
-              <ul style="list-style: none; padding: 0; display: inline-block; text-align: left; line-height: 1.8;">
-                ${listItems}
-              </ul>
-            </div>
-          `;
-          return;
-        }
+    function switchTab(type) {
+      currentType = type;
+      currentFilter = 'all';
+      document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.type === type));
+      $('searchInput').placeholder = CONFIG[type].placeholder;
+      $('searchInput').value = '';
+      loadData();
+    }
 
-        // ย้ายการเช็คสีเข้าไปข้างใน map(...) เพื่อให้ทำงานกับ item แต่ละตัว
-        container.innerHTML = data.map(item => {
-          const isRequestRate = item.expiryDate === 'Request Rate';
-          const expiryColor = isRequestRate ? '#ffffff' : '#ff4d4f';
-
-          return `
-            <div class="result-item">
-              <div class="hotel-name">${item.name}</div>
-              <div class="location">${item.location}</div>
-
-              <div class="contract-label">📄 Contract Rate</div>
-              <a href="${item.contractUrl}" target="_blank" class="btn-open">[ OPEN FILE ]</a>
-
-              <div class="expiry-label">Expiry Date</div>
-              <div class="expiry-date" style="color: ${expiryColor};">${item.expiryDate}</div>
-            </div>
-          `;
-        }).join('');
-
-      } catch (error) {
-        console.error('Search error:', error);
-      }
+    function setFilter(key) {
+      currentFilter = key;
+      render();
     }
 
     function handleSearch() {
       clearTimeout(timer);
-      timer = setTimeout(() => {
-        const keyword = document.getElementById('searchInput').value;
-        fetchHotels(keyword);
-      }, 300);
+      timer = setTimeout(loadData, 300);
     }
 
-    // ดึงข้อมูลโรงแรมทั้งหมดมาแสดงทันทีเมื่อเปิดหน้าเว็บ
-    window.onload = () => fetchHotels('');
+    async function loadData() {
+      const myReq = ++reqId; // กันผลของ request เก่ามาทับผลใหม่
+      const container = $('resultsContainer');
+      container.innerHTML = '<div class="notice">กำลังโหลด...</div>';
+      $('count').textContent = '';
+      try {
+        const q = $('searchInput').value.trim();
+        const res = await fetch(`${CONFIG[currentType].endpoint}?query=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if (myReq !== reqId) return;
+        if (!res.ok) throw new Error(data.error || 'Server error');
+        allResults = data;
+        render();
+      } catch (err) {
+        if (myReq !== reqId) return;
+        console.error('Search error:', err);
+        $('filters').innerHTML = '';
+        container.innerHTML = `<div class="notice">โหลดข้อมูลไม่สำเร็จ<br>ลองรีเฟรช (F5) แล้วค้นหาใหม่อีกครั้ง<br><small>${esc(err.message)}</small></div>`;
+      }
+    }
+
+    function render() {
+      const withStatus = allResults.map((it) => ({ ...it, st: getStatus(it.expiryISO) }));
+      const counts = { all: withStatus.length, expired: 0, soon: 0, ok: 0, none: 0 };
+      withStatus.forEach((it) => counts[it.st.key]++);
+
+      // chip กรองตามสถานะ
+      const chips = [
+        ['all', 'ทั้งหมด'], ['ok', '🟢 ปกติ'], ['soon', '🟡 ใกล้หมด'], ['expired', '🔴 หมดแล้ว'], ['none', '⚪ ไม่มีวันหมดอายุ'],
+      ];
+      $('filters').innerHTML = chips
+        .filter(([k]) => k === 'all' || counts[k] > 0)
+        .map(([k, label]) => `<button class="chip ${currentFilter === k ? 'active' : ''}" onclick="setFilter('${k}')">${label} (${counts[k]})</button>`)
+        .join('');
+
+      let list = currentFilter === 'all' ? withStatus : withStatus.filter((it) => it.st.key === currentFilter);
+
+      // เรียง: ใกล้หมดก่อน → ปกติ → หมดแล้ว → ไม่ระบุ (ภายในกลุ่มเรียงตามวันที่)
+      const order = { soon: 0, ok: 1, expired: 2, none: 3 };
+      list = [...list].sort((a, b) => order[a.st.key] - order[b.st.key] || (a.expiryISO || '').localeCompare(b.expiryISO || '') || a.name.localeCompare(b.name));
+
+      $('count').textContent = `พบ ${list.length} รายการ`;
+
+      if (list.length === 0) {
+        $('resultsContainer').innerHTML = '<div class="notice">ไม่พบข้อมูล ลองเปลี่ยนคำค้นหา หรือกด "ทั้งหมด" ด้านบน</div>';
+        return;
+      }
+
+      const cfg = CONFIG[currentType];
+      $('resultsContainer').innerHTML = list.map((it) => {
+        const files = (it.files || []).filter((f) => safeUrl(f.url));
+        const fileHtml = files.length
+          ? files.map((f) => `<a href="${esc(safeUrl(f.url))}" target="_blank" rel="noopener" class="btn-open" title="${esc(f.name)}">📂 ${esc(f.name || 'OPEN FILE')}</a>`).join('')
+          : '<div class="no-file">ยังไม่มีไฟล์</div>';
+
+        return `
+          <div class="result-item st-${it.st.key}">
+            <div class="item-name">${esc(it.name)}</div>
+            ${it.location ? `<div class="meta">📍 ${esc(it.location)}</div>` : ''}
+            ${it.supplier ? `<div class="meta">🏢 ${esc(it.supplier)}</div>` : ''}
+
+            <div class="label">${cfg.fileLabel}</div>
+            ${fileHtml}
+
+            <div class="label">Expiry Date</div>
+            <div class="expiry-row">
+              <span class="expiry-date">${esc(it.expiryDate)}</span>
+              <span class="badge">${esc(statusLabel(it.st))}</span>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    // เปิดหน้าแล้วแสดงทั้งหมดทันที
+    switchTab('hotel');
   </script>
 </body>
 </html>
