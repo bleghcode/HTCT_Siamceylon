@@ -17,7 +17,7 @@
     body {
       background-color: #121212;
       color: #fff;
-      padding: 30px 20px;
+      padding: 30px 20px 110px; /* เว้นที่ด้านล่างให้แถบสรุปสถานะ */
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -31,22 +31,13 @@
     }
     .tab.active { background: #0070f3; border-color: #0070f3; color: #fff; }
 
-    .search-box { width: 100%; max-width: 600px; margin-bottom: 16px; }
+    .search-box { width: 100%; max-width: 600px; margin-bottom: 24px; }
     .search-box input {
       width: 100%; padding: 15px 20px; font-size: 18px; border-radius: 8px;
       border: 1px solid #333; background-color: #1e1e1e; color: #fff; outline: none;
       transition: border-color 0.3s;
     }
     .search-box input:focus { border-color: #0070f3; }
-
-    .filters { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 8px; }
-    .chip {
-      padding: 6px 14px; border-radius: 999px; border: 1px solid #333;
-      background: #1e1e1e; color: #ccc; font-size: 14px; cursor: pointer;
-    }
-    .chip.active { border-color: #0070f3; color: #fff; background: #0a2a52; }
-
-    .count { font-size: 13px; color: var(--muted); margin-bottom: 18px; min-height: 18px; }
 
     .results-grid {
       width: 100%; max-width: 1000px; display: grid;
@@ -83,12 +74,26 @@
     .st-expired .badge { background: var(--red); }
     .st-soon .badge { background: var(--yellow); }
     .st-ok .badge { background: var(--green); }
-    .st-none .badge { background: #555; color: #fff; }
     .st-expired .expiry-date { color: var(--red); }
     .st-soon .expiry-date { color: var(--yellow); }
     .st-ok .expiry-date { color: var(--green); }
 
     .notice { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 30px 10px; line-height: 1.7; }
+
+    /* แถบสรุปสถานะ ติดด้านล่างสุดของหน้าจอ */
+    .statusbar {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+      background: #181818; border-top: 1px solid #2a2a2a;
+      padding: 10px 16px;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+    }
+    .count { font-size: 13px; color: var(--muted); }
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .chip {
+      padding: 6px 14px; border-radius: 999px; border: 1px solid #333;
+      background: #1e1e1e; color: #ccc; font-size: 14px; cursor: pointer;
+    }
+    .chip.active { border-color: #0070f3; color: #fff; background: #0a2a52; }
   </style>
 </head>
 <body>
@@ -99,13 +104,15 @@
   </div>
 
   <div class="search-box">
-    <input type="text" id="searchInput" autocomplete="off" oninput="handleSearch()">
+    <input type="text" id="searchInput" aria-label="Search" autocomplete="off" oninput="handleSearch()">
   </div>
 
-  <div class="filters" id="filters"></div>
-  <div class="count" id="count"></div>
-
   <div class="results-grid" id="resultsContainer"></div>
+
+  <div class="statusbar">
+    <div class="count" id="count"></div>
+    <div class="filters" id="filters"></div>
+  </div>
 
   <script>
     const CONFIG = {
@@ -116,18 +123,19 @@
       },
       tour: {
         endpoint: '/api/tours/search',
-        placeholder: 'ค้นหาทัวร์ / จุดหมาย / ซัพพลายเออร์... (Search tour, destination or supplier)',
+        placeholder: 'ค้นหาทัวร์ / จุดหมาย... (Search tour name or location)',
         fileLabel: '📄 Contract / Rate File',
       },
     };
     const SOON_DAYS = 30;
-    const STATUS_TEXT = { expired: 'หมดอายุแล้ว', soon: 'ใกล้หมดอายุ', ok: 'ปกติ', none: 'ไม่ระบุวันหมดอายุ' };
+    const REFRESH_AFTER_MS = 30 * 60 * 1000; // ลิงก์ไฟล์ Notion หมดอายุใน ~1 ชม. จึงรีโหลดข้อมูลเมื่อเปิดหน้าค้างไว้นาน
 
     let currentType = 'hotel';
     let currentFilter = 'all';
     let allResults = [];
     let timer;
     let reqId = 0;
+    let lastLoad = Date.now();
 
     const $ = (id) => document.getElementById(id);
 
@@ -136,6 +144,9 @@
     }
     function safeUrl(u) {
       return /^https?:\/\//i.test(u || '') ? u : '';
+    }
+    function plural(n, word) {
+      return `${n} ${word}${n === 1 ? '' : 's'}`;
     }
 
     // คำนวณสถานะวันหมดอายุ
@@ -149,9 +160,9 @@
       return { key: 'ok', days };
     }
     function statusLabel(st) {
-      if (st.key === 'expired') return `หมดอายุแล้ว ${Math.abs(st.days)} วัน`;
-      if (st.key === 'soon') return st.days === 0 ? 'หมดอายุวันนี้' : `เหลืออีก ${st.days} วัน`;
-      return STATUS_TEXT[st.key];
+      if (st.key === 'expired') return `Expired ${plural(Math.abs(st.days), 'day')} ago`;
+      if (st.key === 'soon') return st.days === 0 ? 'Expires today' : `${plural(st.days, 'day')} left`;
+      return 'Valid';
     }
 
     function switchTab(type) {
@@ -176,35 +187,36 @@
     async function loadData() {
       const myReq = ++reqId; // กันผลของ request เก่ามาทับผลใหม่
       const container = $('resultsContainer');
-      container.innerHTML = '<div class="notice">กำลังโหลด...</div>';
+      container.innerHTML = '<div class="notice">Loading...</div>';
       $('count').textContent = '';
+      $('filters').innerHTML = '';
       try {
         const q = $('searchInput').value.trim();
         const res = await fetch(`${CONFIG[currentType].endpoint}?query=${encodeURIComponent(q)}`);
-        const data = await res.json();
+        let data;
+        try { data = await res.json(); } catch (e) { throw new Error(`Server returned an invalid response (${res.status})`); }
         if (myReq !== reqId) return;
-        if (!res.ok) throw new Error(data.error || 'Server error');
+        if (!res.ok) throw new Error(data.error || `Server error (${res.status})`);
         allResults = data;
+        lastLoad = Date.now();
         render();
       } catch (err) {
         if (myReq !== reqId) return;
         console.error('Search error:', err);
-        $('filters').innerHTML = '';
-        container.innerHTML = `<div class="notice">โหลดข้อมูลไม่สำเร็จ<br>ลองรีเฟรช (F5) แล้วค้นหาใหม่อีกครั้ง<br><small>${esc(err.message)}</small></div>`;
+        container.innerHTML = `<div class="notice">Failed to load data.<br>Please refresh (F5) and try again.<br><small>${esc(err.message)}</small></div>`;
       }
     }
 
     function render() {
       const withStatus = allResults.map((it) => ({ ...it, st: getStatus(it.expiryISO) }));
-      const counts = { all: withStatus.length, expired: 0, soon: 0, ok: 0, none: 0 };
+      const counts = { all: withStatus.length, ok: 0, soon: 0, expired: 0, none: 0 };
       withStatus.forEach((it) => counts[it.st.key]++);
 
-      // chip กรองตามสถานะ
+      // แถบสรุปสถานะด้านล่าง (แสดงครบทุกปุ่ม แม้จำนวนเป็น 0 เพื่อไม่ให้ปุ่มที่เลือกอยู่หายไป)
       const chips = [
-        ['all', 'ทั้งหมด'], ['ok', '🟢 ปกติ'], ['soon', '🟡 ใกล้หมด'], ['expired', '🔴 หมดแล้ว'], ['none', '⚪ Request Rate / ไม่มีวันหมดอายุ'],
+        ['all', 'All'], ['ok', '🟢 Valid'], ['soon', '🟡 Expiring soon'], ['expired', '🔴 Expired'], ['none', '⚪ Request Rate / No date'],
       ];
       $('filters').innerHTML = chips
-        .filter(([k]) => k === 'all' || counts[k] > 0)
         .map(([k, label]) => `<button class="chip ${currentFilter === k ? 'active' : ''}" onclick="setFilter('${k}')">${label} (${counts[k]})</button>`)
         .join('');
 
@@ -214,10 +226,10 @@
       const order = { soon: 0, ok: 1, expired: 2, none: 3 };
       list = [...list].sort((a, b) => order[a.st.key] - order[b.st.key] || (a.expiryISO || '').localeCompare(b.expiryISO || '') || a.name.localeCompare(b.name));
 
-      $('count').textContent = `พบ ${list.length} รายการ`;
+      $('count').textContent = `Showing ${list.length} of ${withStatus.length}`;
 
       if (list.length === 0) {
-        $('resultsContainer').innerHTML = '<div class="notice">ไม่พบข้อมูล ลองเปลี่ยนคำค้นหา หรือกด "ทั้งหมด" ด้านบน</div>';
+        $('resultsContainer').innerHTML = '<div class="notice">No results found.<br>Try a different keyword or select "All" below.</div>';
         return;
       }
 
@@ -226,7 +238,7 @@
         const files = (it.files || []).filter((f) => safeUrl(f.url));
         const fileHtml = files.length
           ? files.map((f) => `<a href="${esc(safeUrl(f.url))}" target="_blank" rel="noopener" class="btn-open" title="${esc(f.name)}">📂 ${esc(f.name || 'OPEN FILE')}</a>`).join('')
-          : '<div class="no-file">ยังไม่มีไฟล์</div>';
+          : '<div class="no-file">No file</div>';
 
         return `
           <div class="result-item st-${it.st.key}">
@@ -245,6 +257,11 @@
           </div>`;
       }).join('');
     }
+
+    // เปิดหน้าค้างไว้นานแล้วกลับมาดูอีกที → โหลดข้อมูลใหม่ (กันลิงก์ไฟล์หมดอายุ + อัปเดตสถานะตามวัน)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && Date.now() - lastLoad > REFRESH_AFTER_MS) loadData();
+    });
 
     // เปิดหน้าแล้วแสดงทั้งหมดทันที
     switchTab('hotel');

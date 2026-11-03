@@ -1,17 +1,24 @@
 // ตัวช่วยกลาง ใช้ร่วมกันทั้ง Hotel และ Tour (Cloudflare Pages Functions)
+// ชื่อคอลัมน์ใส่เป็นรายการได้ จะใช้ชื่อแรกที่เจอใน Notion
 
 const SOURCES = {
   hotel: {
     dbEnv: 'NOTION_DATABASE_ID',
-    props: { name: 'Hotel', location: 'Location', supplier: null, exp: 'EXP', files: 'Files & media' },
+    props: { name: ['Hotel'], location: ['Location'], supplier: [], exp: ['EXP'], files: ['Files & media'] },
     searchIn: ['name', 'location'],
-    noDate: 'Request Rate', // ข้อความที่แสดงเมื่อไม่มีวันหมดอายุ (เหมือนของเดิม)
+    noDate: 'Request Rate', // ข้อความเมื่อไม่มีวันหมดอายุ
   },
   tour: {
     dbEnv: 'NOTION_TOUR_DATABASE_ID',
-    props: { name: 'Tour', location: 'Destination', supplier: 'Supplier', exp: 'EXP', files: 'Files & media' },
+    props: {
+      name: ['Tour'],
+      location: ['Location', 'Destination'],
+      supplier: ['Supplier', 'Operator'], // ถ้าไม่มีคอลัมน์นี้ใน Notion จะข้ามไปเอง
+      exp: ['EXP'],
+      files: ['Files & media'],
+    },
     searchIn: ['name', 'location', 'supplier'],
-    noDate: '-', // ถ้าอยากให้ทัวร์ขึ้น Request Rate เหมือนโรงแรม แก้ตรงนี้
+    noDate: 'Request Rate',
   },
 };
 
@@ -37,6 +44,11 @@ async function fetchAllPages(dbId, notionKey) {
   return pages;
 }
 
+function getProp(props, names) {
+  for (const n of names || []) if (props[n]) return props[n];
+  return undefined;
+}
+
 function readText(prop) {
   if (!prop) return '';
   if (prop.title) return prop.title.map((t) => t.plain_text).join('');
@@ -48,11 +60,14 @@ function readText(prop) {
 
 function toItem(page, cfg) {
   const p = page.properties;
-  const files = (p[cfg.props.files]?.files || [])
+  const name = readText(getProp(p, cfg.props.name)).trim();
+  if (!name) return null; // ข้ามแถวว่างที่ยังไม่ได้ตั้งชื่อ
+
+  const files = (getProp(p, cfg.props.files)?.files || [])
     .map((f) => ({ name: f.name, url: f.file?.url || f.external?.url }))
     .filter((f) => f.url);
 
-  const expiryISO = p[cfg.props.exp]?.date?.start?.slice(0, 10) || null;
+  const expiryISO = getProp(p, cfg.props.exp)?.date?.start?.slice(0, 10) || null;
   let expiryDate = cfg.noDate;
   if (expiryISO) {
     const [yyyy, mm, dd] = expiryISO.split('-');
@@ -61,9 +76,9 @@ function toItem(page, cfg) {
 
   return {
     id: page.id,
-    name: readText(p[cfg.props.name]) || 'Untitled',
-    location: readText(p[cfg.props.location]),
-    supplier: cfg.props.supplier ? readText(p[cfg.props.supplier]) : '',
+    name,
+    location: readText(getProp(p, cfg.props.location)),
+    supplier: readText(getProp(p, cfg.props.supplier)),
     files,
     contractUrl: files[0]?.url || '#',
     expiryDate,
@@ -103,7 +118,7 @@ export async function handle(context, type) {
       items = hit.items;
     } else {
       const pages = await fetchAllPages(dbId, env.NOTION_KEY);
-      items = pages.map((pg) => toItem(pg, cfg));
+      items = pages.map((pg) => toItem(pg, cfg)).filter(Boolean);
       cache[type] = { dbId, time: Date.now(), items };
     }
 
