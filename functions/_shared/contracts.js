@@ -10,13 +10,7 @@ const SOURCES = {
   },
   tour: {
     dbEnv: 'NOTION_TOUR_DATABASE_ID',
-    props: {
-      name: ['Tour'],
-      location: ['Location', 'Destination'],
-      supplier: ['Supplier', 'Operator'], // ถ้าไม่มีคอลัมน์นี้ใน Notion จะข้ามไปเอง
-      exp: ['EXP'],
-      files: ['Files & media'],
-    },
+    props: { name: ['Tour'], location: ['Location'], supplier: [], exp: ['EXP'], files: ['Files & media'] },
     searchIn: ['name', 'location', 'supplier'],
     noDate: 'Request Rate',
   },
