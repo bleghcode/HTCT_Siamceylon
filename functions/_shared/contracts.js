@@ -53,6 +53,15 @@ function extractFiles(props, cfg) {
     .filter((f) => f.url);
 }
 
+// ติ๊ก checkbox ใน Notion = รายการใหม่ (แสดง "New!" บนเว็บ)
+// ถ้าไม่ระบุชื่อคอลัมน์ จะใช้คอลัมน์ checkbox ที่มีอยู่ใน database นั้นอัตโนมัติ
+function readNewFlag(props, names) {
+  const prop = names && names.length
+    ? getProp(props, names)
+    : Object.values(props).find((p) => p?.type === 'checkbox');
+  return prop?.type === 'checkbox' && prop.checkbox === true;
+}
+
 function readText(prop) {
   if (!prop) return '';
   if (prop.title) return prop.title.map((t) => t.plain_text).join('');
@@ -86,6 +95,7 @@ function toItem(page, cfg) {
     expiryDate,
     expiryISO,
     updatedAt: page.last_edited_time || null, // วันที่แก้ไขหน้านี้ล่าสุดใน Notion
+    isNew: readNewFlag(p, cfg.props.isNew), // true เมื่อติ๊ก checkbox ใน Notion
   };
 }
 
