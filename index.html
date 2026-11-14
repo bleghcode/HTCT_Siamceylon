@@ -81,6 +81,20 @@
 
     .updated { font-size: 12px; color: var(--muted); margin-top: 14px; }
 
+    /* "New!" : ตัวหนังสือไล่สีเป็นคลื่น เคลื่อนช้าๆ */
+    .new-badge {
+      font-size: 14px; font-weight: 800; letter-spacing: 0.5px;
+      background: linear-gradient(90deg, #ff4fd8, #ff9f43, #ffe14d, #4dff88, #4dd2ff, #a77bff, #ff4fd8);
+      background-size: 300% 100%;
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent; color: transparent;
+      animation: newWave 6s linear infinite;
+    }
+    @keyframes newWave { from { background-position: 0% 50%; } to { background-position: 300% 50%; } }
+    @media (prefers-reduced-motion: reduce) {
+      .new-badge { animation: none; -webkit-text-fill-color: #ffe14d; color: #ffe14d; background: none; }
+    }
+
     .notice { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 30px 10px; line-height: 1.7; }
 
     /* แถบสรุปสถานะ: แถวเดียวเล็กๆ ติดด้านล่างหน้าจอ */
@@ -257,6 +271,7 @@
             <div class="expiry-row">
               <span class="expiry-date">${esc(it.expiryDate)}</span>
               ${it.st.key === 'none' ? '' : `<span class="badge">${esc(statusLabel(it.st))}</span>`}
+              ${it.isNew ? '<span class="new-badge">New!</span>' : ''}
             </div>
             ${updated ? `<div class="updated">Updated ${esc(updated)}</div>` : ''}
           </div>`;
